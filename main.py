@@ -10,16 +10,25 @@ import numpy as np
 import tensorflow as tf
 from config import get_config
 from equation import get_equation
-from solver import FeedForwardModel
+from model_class_orig import FeedForwardModel
+
+def del_all_flags(FLAGS):
+    flags_dict = FLAGS._flags()    
+    keys_list = [keys for keys in flags_dict]    
+    for keys in keys_list:
+        FLAGS.__delattr__(keys)
+
+del_all_flags(tf.flags.FLAGS)
 
 FLAGS = tf.app.flags.FLAGS
-tf.app.flags.DEFINE_string('problem_name', 'HJB',
+tf.app.flags.DEFINE_string('f', '', 'kernel')
+
+tf.app.flags.DEFINE_string('problem_name', 'EuropeanCall',
                            """The name of partial differential equation.""")
 tf.app.flags.DEFINE_integer('num_run', 1,
                             """The number of experiments to repeatedly run for the same problem.""")
 tf.app.flags.DEFINE_string('log_dir', './logs',
                            """Directory where to write event logs and output array.""")
-
 
 def main():
     problem_name = FLAGS.problem_name
