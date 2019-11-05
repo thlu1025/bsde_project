@@ -27,7 +27,7 @@ class HJBConfig(Config):
     # Y_0 is about 4.5901.
     dim = 100
     total_time = 1.0
-    num_time_interval = 20
+    num_time_interval = 10
     lr_boundaries = [400]
     num_iterations = 2000
     lr_values = list(np.array([1e-2, 1e-2]))
