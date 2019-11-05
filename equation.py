@@ -14,7 +14,7 @@ class Equation(object):
         self._sqrt_delta_t = np.sqrt(self._delta_t)
         self._y_init = None
 
-    def sample(self, num_sample):
+    def sample(self, num_sample,seed):
         """Sample forward SDE."""
         raise NotImplementedError
 
@@ -105,9 +105,12 @@ class EuropeanCall(Equation):
         super(EuropeanCall, self).__init__(dim, total_time, num_time_interval)
         self._x_init = np.ones(self._dim) * 100
         self._sigma = 0.2
-        self._r = 0.02
+        self._r = 0.00
 
-    def sample(self, num_sample):
+    def sample(self, num_sample,seed):
+        if seed:
+            np.random.seed(0)
+
         dw_sample = np.random.randn(num_sample,
                                      self._dim,
                                      self._num_time_interval) * self._sqrt_delta_t

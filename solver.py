@@ -28,7 +28,7 @@ class FeedForwardModel(object):
         # to save iteration results
         training_history = []
         # for validation
-        dw_valid, x_valid = self._bsde.sample(self._config.valid_size)
+        dw_valid, x_valid = self._bsde.sample(self._config.valid_size,False)
         # can still use batch norm of samples in the validation phase
         feed_dict_valid = {self._dw: dw_valid, self._x: x_valid, self._is_training: False}
         # initialization
@@ -36,17 +36,20 @@ class FeedForwardModel(object):
         # begin sgd iteration
         for step in range(self._config.num_iterations+1):
             if step % self._config.logging_frequency == 0:
-                loss, init = self._sess.run([self._loss, self._y_init], feed_dict=feed_dict_valid)
+                loss, init, graphs,z_init = self._sess.run([self._loss, self._y_init, self.graphs,self._z_init
+                                                         ], feed_dict=feed_dict_valid)
                 elapsed_time = time.time()-start_time+self._t_build
                 training_history.append([step, loss, init, elapsed_time])
                 if self._config.verbose:
                     logging.info("step: %5u,    loss: %.4e,   Y0: %.4e,  elapsed time %3u" % (
                         step, loss, init, elapsed_time))
-            dw_train, x_train = self._bsde.sample(self._config.batch_size)
+                    logging.info("z_init: %.4e" % (
+                        z_init))
+            dw_train, x_train = self._bsde.sample(self._config.batch_size,False)
             self._sess.run(self._train_ops, feed_dict={self._dw: dw_train,
                                                        self._x: x_train,
                                                        self._is_training: True})
-        return np.array(training_history)
+        return np.array(training_history), graphs
 
     def build(self):
         start_time = time.time()
@@ -58,26 +61,41 @@ class FeedForwardModel(object):
                                                      minval=self._config.y_init_range[0],
                                                      maxval=self._config.y_init_range[1],
                                                      dtype=TF_DTYPE))
-        z_init = tf.Variable(tf.random_uniform([1, self._dim],
+        self._z_init = tf.Variable(tf.random_uniform([1, self._dim],
                                                minval=-.1, maxval=.1,
                                                dtype=TF_DTYPE))
         all_one_vec = tf.ones(shape=tf.stack([tf.shape(self._dw)[0], 1]), dtype=TF_DTYPE)
         y = all_one_vec * self._y_init
-        z = tf.matmul(all_one_vec, z_init)
+        z = tf.matmul(all_one_vec,tf.divide(1,1+tf.exp(-self._z_init)))
+        x = np.linspace(80, 120, 82)
+        self.x = tf.constant(x, dtype=TF_DTYPE, shape=[1, 82, 1])
+    #    x = tf.get_variable(name="x", initializer=tf.linspace(81.0, 120.0, 78),
+    #                        shape=tf.stack([tf.shape(self._dw)[0], 1]), dtype=TF_DTYPE)
         with tf.variable_scope('forward'):
+            self.graphs = []
+            self.z = []
             for t in range(0, self._num_time_interval-1):
+                print("t:", t)
                 y = y - self._bsde.delta_t * (
                     self._bsde.f_tf(time_stamp[t], self._x[:, :, t], y, z)
-                ) + tf.reduce_sum(z * self._dw[:, :, t], 1, keep_dims=True)
+                ) + tf.reduce_sum(z *0.2*self._x[:, :, t]* self._dw[:, :, t], 1, keep_dims=True)
                 z = self._subnetwork(self._x[:, :, t + 1], str(t + 1)) / self._dim
+                self.z.append(z)
+                #print(tf.shape(self._x[:, :, t + 1]))
+                l = []
+                for i in range(82):
+                  #  print("i:", i)
+                    l.append(self._subnetwork(self.x[:, i], str(t + 1)) / self._dim)
+                self.graphs.append(l)
             # terminal time
             y = y - self._bsde.delta_t * self._bsde.f_tf(
                 time_stamp[-1], self._x[:, :, -2], y, z
-            ) + tf.reduce_sum(z * self._dw[:, :, -1], 1, keep_dims=True)
+            ) + tf.reduce_sum(z * 0.2 *self._x[:, :, t]* self._dw[:, :, -1], 1, keep_dims=True)
             delta = y - self._bsde.g_tf(self._total_time, self._x[:, :, -1])
             # use linear approximation outside the clipped range
-            self._loss = tf.reduce_mean(tf.where(tf.abs(delta) < DELTA_CLIP, tf.square(delta),
-                                                 2 * DELTA_CLIP * tf.abs(delta) - DELTA_CLIP ** 2))
+            #self._loss = tf.reduce_mean(tf.where(tf.abs(delta) < DELTA_CLIP, tf.square(delta),
+                                                 #2 * DELTA_CLIP * tf.abs(delta) - DELTA_CLIP ** 2))
+            self._loss = tf.reduce_mean(tf.square(delta))
         # train operations
         global_step = tf.get_variable('global_step', [],
                                       initializer=tf.constant_initializer(0),
@@ -95,7 +113,7 @@ class FeedForwardModel(object):
         self._t_build = time.time()-start_time
 
     def _subnetwork(self, x, name):
-        with tf.variable_scope(name):
+        with tf.variable_scope(name, reuse=tf.AUTO_REUSE):
             # standardize the path input first
             # the affine  could be redundant, but helps converge faster
             hiddens = self._batch_norm(x, name='path_input_norm')
@@ -106,7 +124,7 @@ class FeedForwardModel(object):
                                                   name='layer_{}'.format(i))
             output = self._dense_batch_layer(hiddens,
                                              self._config.num_hiddens[-1],
-                                             activation_fn=None,
+                                             activation_fn=tf.nn.sigmoid,
                                              name='final_layer')
         return output
 
