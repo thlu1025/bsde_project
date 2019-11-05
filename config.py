@@ -27,7 +27,7 @@ class HJBConfig(Config):
     # Y_0 is about 4.5901.
     dim = 100
     total_time = 1.0
-    num_time_interval = 10
+    num_time_interval = 20
     lr_boundaries = [400]
     num_iterations = 2000
     lr_values = list(np.array([1e-2, 1e-2]))
@@ -43,7 +43,7 @@ class EuropeanCallConfig(Config):
 
     dim=1
     total_time=1
-    num_time_interval=20
+    num_time_interval=10
     lr_values = list(np.array([5e-3, 5e-3]))
     lr_boundaries = [2000]
     num_hiddens = [dim, dim+10, dim+10,dim+10,dim+10, dim]
