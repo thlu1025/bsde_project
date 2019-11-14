@@ -73,23 +73,24 @@ class FeedForwardModel(object):
             z = _network[i](z)
         return z
     
-    def relu_adding(self, network, units, num, activation = None):
+    def relu_adding(self, network, unit_lst, activation = None):
         #num >=2
-        network.append(Dense(units = units, input_shape = (self.dim,), activation = 'relu'))
-        for i in range(num - 2):
-            network.append(Dense(units = units, input_shape = (units,), activation = 'relu'))
-        network.append(Dense(units = 1, input_shape = (units,), activation = activation))
+        num = len(unit_lst)
+        network.append(Dense(units = unit_lst[0], input_shape = (self.dim,), activation = 'relu'))
+        for i in range(1, num):
+            network.append(Dense(units = unit_lst[i], input_shape = (unit_lst[i-1],), activation = 'relu'))
+        network.append(Dense(units = self.dim, input_shape = (unit_lst[-1],), activation = activation))
     
     def build(self):
         start_time = time.time()
         time_stamp = np.arange(0, self.num_time_interval) * self.delta_t
         
-        self.relu_adding(self.f_network, self.config.f_units, self.config.f_layernum, 'relu')
+        self.relu_adding(self.f_network, self.config.f_units, 'relu')
         
         for i in range(self.num_time_interval):
             temp = []
             temp.append(BatchNormalization())
-            self.relu_adding(temp, self.config.z_units, self.config.z_layernum)
+            self.relu_adding(temp, self.config.z_units)
             self.z_network.append(temp) 
         
         self._x = tf.placeholder(TF_DTYPE, [None,self.dim, self.num_time_interval+1], name='X')
@@ -106,15 +107,17 @@ class FeedForwardModel(object):
             z = self.nn_structure(self.z_network[0], self._x[:,:,0])
             y_init = y + 0.0
             
-            for t in range(0, self.num_time_interval-1):
+            for t in range(0, self.num_time_interval - 1):
                 y = y - self.delta_t * (
                     self.bsde.f_tf(time_stamp[t], self._x[:, :, t], y, z))
                 
                 y = y + tf.reduce_sum(z * self.bsde._sigma * self._x[:, :, t]
                 * self._dw[:, :, t], 1, keepdims=True)
                 
-                z = self.nn_structure(self.z_network[t], self._x[:, :, t + 1])
+                z = self.nn_structure(self.z_network[ t+1 ], self._x[:, :, t + 1])
+                       
             
+
             y = y - self.bsde.delta_t * self.bsde.f_tf(
                 time_stamp[-1], self._x[:, :, -2], y, z)
             y = y + tf.reduce_sum(z * self.bsde._sigma *self._x[:, :, -2]

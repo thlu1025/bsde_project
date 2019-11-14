@@ -35,7 +35,7 @@ class HJBConfig(Config):
     y_init_range = [0, 1]
 
 class EuropeanCallConfig(Config):
-    num_iterations = 10000
+    num_iterations = 20000
     dim = 1
     total_time = 1
     num_time_interval = 10
@@ -43,9 +43,9 @@ class EuropeanCallConfig(Config):
     lr_boundaries = [1000]
     pre_train_num_iteration = 5000
     f_layernum = 20
-    z_layernum = 20
-    f_units = dim + 10
-    z_units = dim + 10
+    z_layernum = 10
+    f_units = [dim + 20]*f_layernum
+    z_units = [dim + 20]*z_layernum
     ob_num = 82
 
 
